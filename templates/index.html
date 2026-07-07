@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>首页 - 用户管理系统</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">用户管理系统</div>
+        <div class="nav-menu">
+            {% if user %}
+                <span class="nav-welcome">欢迎，{{ user.username }}</span>
+                <a href="/logout" class="nav-link">退出</a>
+            {% else %}
+                <a href="/login" class="nav-link">登录</a>
+            {% endif %}
+        </div>
+    </nav>
+
+    <main class="container">
+        <div class="card">
+            {% if user %}
+                <h2>欢迎回来，{{ user.username }}！</h2>
+                <div class="user-info">
+                    <table class="info-table">
+                        <tr>
+                            <td class="info-label">用户名</td>
+                            <td class="info-value">{{ user.username }}</td>
+                        </tr>
+                        <tr>
+                            <td class="info-label">密码</td>
+                            <td class="info-value">••••••••</td>
+                        </tr>
+                        <tr>
+                            <td class="info-label">邮箱</td>
+                            <td class="info-value">{{ user.email }}</td>
+                        </tr>
+                        <tr>
+                            <td class="info-label">手机</td>
+                            <td class="info-value">{{ user.phone }}</td>
+                        </tr>
+                        <tr>
+                            <td class="info-label">角色</td>
+                            <td class="info-value">{{ user.role }}</td>
+                        </tr>
+                        <tr>
+                            <td class="info-label">余额</td>
+                            <td class="info-value">{{ user.balance }}</td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="action-bar">
+                    <a href="/logout" class="btn btn-danger">退出登录</a>
+                </div>
+            {% else %}
+                <h2>请先登录</h2>
+                <p class="text-muted">您尚未登录，请先登录以查看用户信息。</p>
+                <div class="action-bar">
+                    <a href="/login" class="btn btn-primary">前往登录</a>
+                </div>
+            {% endif %}
+        </div>
+    </main>
+</body>
+</html>

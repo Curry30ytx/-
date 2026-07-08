@@ -204,3 +204,86 @@ a {
     font-size: 14px;
     margin-top: 8px;
 }
+
+/* ===== 分隔线 ===== */
+.divider {
+    border: none;
+    border-top: 1px solid #f0f0f0;
+    margin: 28px 0;
+}
+
+/* ===== 搜索功能 ===== */
+.search-form {
+    margin-top: 16px;
+}
+
+.search-box {
+    display: flex;
+    gap: 10px;
+}
+
+.search-input {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid #d9d9d9;
+    border-radius: 6px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.search-input:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+}
+
+.search-btn {
+    width: auto;
+    padding: 10px 24px;
+    font-size: 14px;
+}
+
+.search-result-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+.search-result-table th {
+    background: #fafafa;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: #888;
+    text-align: left;
+    border-bottom: 2px solid #f0f0f0;
+}
+
+.search-result-table td {
+    padding: 10px 14px;
+    font-size: 14px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.search-result-table tr:hover td {
+    background: #fafafa;
+}
+
+.no-result {
+    text-align: center;
+    color: #999;
+    font-size: 14px;
+    margin-top: 20px;
+    padding: 20px;
+}
+
+/* ===== 成功消息 ===== */
+.success-message {
+    background: #f6ffed;
+    border: 1px solid #b7eb8f;
+    color: #52c41a;
+    padding: 10px 16px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    font-size: 14px;
+    text-align: center;
+}

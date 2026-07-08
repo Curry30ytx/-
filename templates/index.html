@@ -15,6 +15,7 @@
                 <a href="/logout" class="nav-link">退出</a>
             {% else %}
                 <a href="/login" class="nav-link">登录</a>
+                <a href="/register" class="nav-link">注册</a>
             {% endif %}
         </div>
     </nav>
@@ -54,11 +55,50 @@
                 <div class="action-bar">
                     <a href="/logout" class="btn btn-danger">退出登录</a>
                 </div>
+
+                <!-- 搜索功能 -->
+                <hr class="divider">
+                <h3>用户搜索</h3>
+                <form method="GET" action="/search" class="search-form">
+                    <div class="search-box">
+                        <input type="text" name="keyword" placeholder="输入用户名或邮箱搜索..." value="{{ keyword or '' }}" class="search-input">
+                        <button type="submit" class="btn btn-primary search-btn">搜索</button>
+                    </div>
+                </form>
+
+                {% if results is defined %}
+                    {% if results %}
+                        <table class="search-result-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>用户名</th>
+                                    <th>邮箱</th>
+                                    <th>手机</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in results %}
+                                <tr>
+                                    <td>{{ row[0] }}</td>
+                                    <td>{{ row[1] }}</td>
+                                    <td>{{ row[2] }}</td>
+                                    <td>{{ row[3] }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    {% elif keyword %}
+                        <p class="no-result">无搜索结果</p>
+                    {% endif %}
+                {% endif %}
+
             {% else %}
                 <h2>请先登录</h2>
                 <p class="text-muted">您尚未登录，请先登录以查看用户信息。</p>
                 <div class="action-bar">
                     <a href="/login" class="btn btn-primary">前往登录</a>
+                    <a href="/register" class="btn btn-primary" style="margin-left:10px;">注册账号</a>
                 </div>
             {% endif %}
         </div>

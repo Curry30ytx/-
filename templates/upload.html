@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>上传文件 - 用户管理系统</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">用户管理系统</div>
+        <div class="nav-menu">
+            {% if session.get('username') %}
+                <span class="nav-welcome">欢迎，{{ session['username'] }}</span>
+                <a href="/" class="nav-link">首页</a>
+                <a href="/upload" class="nav-link">上传</a>
+                <a href="/logout" class="nav-link">退出</a>
+            {% else %}
+                <a href="/login" class="nav-link">登录</a>
+                <a href="/register" class="nav-link">注册</a>
+            {% endif %}
+        </div>
+    </nav>
+
+    <main class="container">
+        <div class="card login-card">
+            <h2>安全文件上传</h2>
+
+            {% if error %}
+                <div class="error-message">{{ error }}</div>
+            {% endif %}
+
+            {% if success %}
+                <div class="success-message">
+                    {{ success }}<br>
+                    <small>原始文件名：{{ original_name }}</small>
+                </div>
+            {% endif %}
+
+            <form method="POST" action="/upload" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="file">选择图片文件（jpg/png/gif，最大2MB）</label>
+                    <input type="file" id="file" name="file" accept=".jpg,.jpeg,.png,.gif" required>
+                </div>
+                <button type="submit" class="btn btn-primary">上 传</button>
+            </form>
+
+            <p class="text-muted" style="margin-top:16px;">
+                <a href="/" style="color:#667eea;">← 返回首页</a>
+            </p>
+        </div>
+    </main>
+</body>
+</html>

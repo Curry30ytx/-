@@ -1,11 +1,48 @@
 import sqlite3
 import os
 import re
-from flask import Flask, render_template, request, redirect, session
+import uuid
+from pathlib import Path
+from flask import Flask, render_template, request, redirect, session, url_for
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24).hex()
+
+# ============================================================
+# 文件上传配置
+# ============================================================
+
+UPLOAD_FOLDER = Path("data/uploads")
+UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
+ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "gif"}
+MAX_FILE_SIZE = 2 * 1024 * 1024  # 2MB
+
+
+def allowed_file(filename):
+    """白名单校验：只允许指定扩展名"""
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def verify_image_content(filepath):
+    """验证文件内容是否为真实图片（检查魔数/Magic Bytes）"""
+    try:
+        with open(filepath, "rb") as f:
+            header = f.read(16)
+        # PNG: 89 50 4E 47
+        if header[:4] == b"\x89PNG":
+            return True
+        # JPEG: FF D8 FF
+        if header[:2] == b"\xff\xd8" and header[3] == b"\xff"[0]:
+            return True
+        # GIF87a: 47 49 46 38 37 61
+        if header[:6] in (b"GIF87a", b"GIF89a"):
+            return True
+        return False
+    except Exception:
+        return False
+
 
 # ============================================================
 # 数据库初始化
@@ -29,6 +66,15 @@ def init_db():
               ("admin", admin_pwd, "admin@example.com", "13800138000"))
     c.execute("INSERT OR IGNORE INTO users (username, password, email, phone) VALUES (?, ?, ?, ?)",
               ("alice", alice_pwd, "alice@example.com", "13900139001"))
+    # 上传记录表
+    c.execute("""CREATE TABLE IF NOT EXISTS uploads (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        filename TEXT NOT NULL,
+        original_name TEXT NOT NULL,
+        username TEXT NOT NULL,
+        file_size INTEGER DEFAULT 0,
+        uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )""")
     conn.commit()
     conn.close()
 
@@ -70,7 +116,22 @@ def sanitize_text(text):
 
 
 # ============================================================
-# 路由
+# 登录校验装饰器
+# ============================================================
+
+from functools import wraps
+
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if "username" not in session:
+            return redirect("/login")
+        return f(*args, **kwargs)
+    return decorated
+
+
+# ============================================================
+# 路由：首页
 # ============================================================
 
 @app.route("/")
@@ -177,6 +238,87 @@ def search():
     if username:
         user_info = get_user_from_db(username)
     return render_template("index.html", user=user_info, results=results, keyword=keyword)
+
+
+# ============================================================
+# 路由：安全文件上传
+# ============================================================
+
+@app.route("/upload", methods=["GET", "POST"])
+@login_required
+def upload_file():
+    if request.method == "POST":
+        # 检查是否有文件
+        if "file" not in request.files:
+            return render_template("upload.html", error="请选择文件")
+
+        file = request.files["file"]
+        if file.filename == "":
+            return render_template("upload.html", error="请选择文件")
+
+        # 1. 扩展名白名单校验
+        if not allowed_file(file.filename):
+            return render_template(
+                "upload.html",
+                error=f"不允许的文件类型，仅支持 {', '.join(sorted(ALLOWED_EXTENSIONS))}",
+            )
+
+        # 2. 文件名安全检查
+        original_name = secure_filename(file.filename)
+
+        # 3. 生成随机文件名（防路径穿越、防文件名猜测）
+        ext = original_name.rsplit(".", 1)[1].lower()
+        new_filename = f"{uuid.uuid4().hex}.{ext}"
+        save_path = UPLOAD_FOLDER / new_filename
+
+        # 4. 保存到安全目录（不在 web 根目录下）
+        file.save(save_path)
+
+        # 5. 检查文件大小
+        file_size = save_path.stat().st_size
+        if file_size > MAX_FILE_SIZE:
+            save_path.unlink()  # 删除超限文件
+            return render_template("upload.html", error="文件大小超过限制（最大2MB）")
+
+        # 6. 内容校验：验证魔数（Magic Bytes）
+        if not verify_image_content(save_path):
+            save_path.unlink()  # 删除伪造文件
+            return render_template(
+                "upload.html",
+                error="文件内容不是有效的图片格式（仅接受真实 jpg/png/gif）",
+            )
+
+        # 7. 记录上传信息到数据库
+        username = session["username"]
+        conn = sqlite3.connect("data/users.db")
+        c = conn.cursor()
+        try:
+            c.execute(
+                "INSERT INTO uploads (filename, original_name, username, file_size) VALUES (?, ?, ?, ?)",
+                (new_filename, original_name, username, file_size),
+            )
+            conn.commit()
+        except Exception:
+            pass
+        finally:
+            conn.close()
+
+        return render_template(
+            "upload.html",
+            success="文件上传成功！",
+            filename=new_filename,
+            original_name=original_name,
+        )
+
+    return render_template("upload.html")
+
+
+@app.route("/uploads/<filename>")
+@login_required
+def uploaded_file(filename):
+    """安全地提供上传的文件（通过 Flask 路由，不走静态目录）"""
+    from flask import send_from_directory
+    return send_from_directory(UPLOAD_FOLDER, filename)
 
 
 if __name__ == "__main__":

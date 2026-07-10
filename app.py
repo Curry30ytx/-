@@ -57,21 +57,15 @@ def init_db():
         username TEXT UNIQUE,
         password TEXT,
         email TEXT,
-        phone TEXT,
-        balance REAL DEFAULT 0
+        phone TEXT
     )""")
-    # 尝试添加 balance 列（兼容旧表）
-    try:
-        c.execute("ALTER TABLE users ADD COLUMN balance REAL DEFAULT 0")
-    except Exception:
-        pass  # 字段已存在
-    # 插入默认用户（密码已哈希）
+    # 插入默认管理员（密码已哈希）
     admin_pwd = generate_password_hash("admin123")
     alice_pwd = generate_password_hash("alice2025")
-    c.execute("INSERT OR IGNORE INTO users (username, password, email, phone, balance) VALUES (?, ?, ?, ?, ?)",
-              ("admin", admin_pwd, "admin@example.com", "13800138000", 99999))
-    c.execute("INSERT OR IGNORE INTO users (username, password, email, phone, balance) VALUES (?, ?, ?, ?, ?)",
-              ("alice", alice_pwd, "alice@example.com", "13900139001", 100))
+    c.execute("INSERT OR IGNORE INTO users (username, password, email, phone) VALUES (?, ?, ?, ?)",
+              ("admin", admin_pwd, "admin@example.com", "13800138000"))
+    c.execute("INSERT OR IGNORE INTO users (username, password, email, phone) VALUES (?, ?, ?, ?)",
+              ("alice", alice_pwd, "alice@example.com", "13900139001"))
     # 上传记录表
     c.execute("""CREATE TABLE IF NOT EXISTS uploads (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -119,31 +113,6 @@ def validate_input(text, max_len=50):
 def sanitize_text(text):
     """清洗文本：去除首尾空格"""
     return text.strip() if text else ""
-
-
-def get_user_by_id(user_id):
-    """根据ID从数据库获取用户完整信息（含余额）"""
-    conn = sqlite3.connect("data/users.db")
-    c = conn.cursor()
-    try:
-        c.execute(
-            "SELECT id, username, email, phone, balance FROM users WHERE id = ?",
-            (user_id,)
-        )
-        row = c.fetchone()
-        if row:
-            return {
-                "id": row[0],
-                "username": row[1],
-                "email": row[2],
-                "phone": row[3],
-                "balance": row[4]
-            }
-        return None
-    except Exception:
-        return None
-    finally:
-        conn.close()
 
 
 # ============================================================
@@ -269,45 +238,6 @@ def search():
     if username:
         user_info = get_user_from_db(username)
     return render_template("index.html", user=user_info, results=results, keyword=keyword)
-
-
-# ============================================================
-# 路由：个人中心（无权限校验）
-# ============================================================
-
-@app.route("/profile")
-def profile():
-    user_id = request.args.get("user_id", "")
-    user_info = None
-    if user_id and user_id.isdigit():
-        user_info = get_user_by_id(int(user_id))
-    return render_template("profile.html", user=user_info, user_id=user_id)
-
-
-# ============================================================
-# 路由：充值（无金额正负校验）
-# ============================================================
-
-@app.route("/recharge", methods=["POST"])
-def recharge():
-    user_id = request.form.get("user_id", "")
-    amount = request.form.get("amount", "0")
-
-    if user_id.isdigit():
-        conn = sqlite3.connect("data/users.db")
-        c = conn.cursor()
-        try:
-            c.execute(
-                "UPDATE users SET balance = balance + ? WHERE id = ?",
-                (float(amount), int(user_id))
-            )
-            conn.commit()
-        except Exception:
-            pass
-        finally:
-            conn.close()
-
-    return redirect(f"/profile?user_id={user_id}")
 
 
 # ============================================================

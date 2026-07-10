@@ -57,15 +57,19 @@ def init_db():
         username TEXT UNIQUE,
         password TEXT,
         email TEXT,
-        phone TEXT
+        phone TEXT,
+        balance REAL DEFAULT 0
     )""")
-    # 插入默认管理员（密码已哈希）
+    try:
+        c.execute("ALTER TABLE users ADD COLUMN balance REAL DEFAULT 0")
+    except Exception:
+        pass
     admin_pwd = generate_password_hash("admin123")
     alice_pwd = generate_password_hash("alice2025")
-    c.execute("INSERT OR IGNORE INTO users (username, password, email, phone) VALUES (?, ?, ?, ?)",
-              ("admin", admin_pwd, "admin@example.com", "13800138000"))
-    c.execute("INSERT OR IGNORE INTO users (username, password, email, phone) VALUES (?, ?, ?, ?)",
-              ("alice", alice_pwd, "alice@example.com", "13900139001"))
+    c.execute("INSERT OR IGNORE INTO users (username, password, email, phone, balance) VALUES (?, ?, ?, ?, ?)",
+              ("admin", admin_pwd, "admin@example.com", "13800138000", 99999))
+    c.execute("INSERT OR IGNORE INTO users (username, password, email, phone, balance) VALUES (?, ?, ?, ?, ?)",
+              ("alice", alice_pwd, "alice@example.com", "13900139001", 100))
     # 上传记录表
     c.execute("""CREATE TABLE IF NOT EXISTS uploads (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -113,6 +117,22 @@ def validate_input(text, max_len=50):
 def sanitize_text(text):
     """清洗文本：去除首尾空格"""
     return text.strip() if text else ""
+
+
+def get_user_by_id(user_id):
+    """根据ID从数据库获取用户信息（含余额）"""
+    conn = sqlite3.connect("data/users.db")
+    c = conn.cursor()
+    try:
+        c.execute("SELECT id, username, email, phone, balance FROM users WHERE id = ?", (user_id,))
+        row = c.fetchone()
+        if row:
+            return {"id": row[0], "username": row[1], "email": row[2], "phone": row[3], "balance": row[4]}
+        return None
+    except Exception:
+        return None
+    finally:
+        conn.close()
 
 
 # ============================================================
@@ -238,6 +258,68 @@ def search():
     if username:
         user_info = get_user_from_db(username)
     return render_template("index.html", user=user_info, results=results, keyword=keyword)
+
+
+# ============================================================
+# 路由：个人中心（已修复——从session获取身份）
+# ============================================================
+
+@app.route("/profile")
+@login_required
+def profile():
+    username = session.get("username")
+    user_info = None
+    if username:
+        user_info = get_user_from_db(username)
+        if user_info:
+            # 获取带余额的完整信息
+            user_id = user_info.get("id")
+            # 用username从数据库查带余额的完整信息
+            conn = sqlite3.connect("data/users.db")
+            c = conn.cursor()
+            c.execute("SELECT id, username, email, phone, balance FROM users WHERE username = ?", (username,))
+            row = c.fetchone()
+            conn.close()
+            if row:
+                user_info = {"id": row[0], "username": row[1], "email": row[2], "phone": row[3], "balance": row[4]}
+    return render_template("profile.html", user=user_info)
+
+
+# ============================================================
+# 路由：充值（已修复——从session获取身份 + 金额校验）
+# ============================================================
+
+@app.route("/recharge", methods=["POST"])
+@login_required
+def recharge():
+    username = session.get("username")
+    if not username:
+        return redirect("/login")
+
+    amount_str = request.form.get("amount", "0")
+
+    # 金额校验：必须为正数
+    try:
+        amount = float(amount_str)
+        if amount <= 0:
+            return render_template("profile.html", user=None, error="充值金额必须大于0")
+        if amount > 100000:
+            return render_template("profile.html", user=None, error="单次充值金额不能超过10万")
+    except ValueError:
+        return render_template("profile.html", user=None, error="金额格式不正确")
+
+    # 只能给自己充值（从 session 获取用户名，不信任表单）
+    conn = sqlite3.connect("data/users.db")
+    c = conn.cursor()
+    try:
+        c.execute("UPDATE users SET balance = balance + ? WHERE username = ?", (amount, username))
+        conn.commit()
+    except Exception:
+        pass
+    finally:
+        conn.close()
+
+    return redirect("/profile")
 
 
 # ============================================================

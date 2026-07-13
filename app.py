@@ -323,6 +323,43 @@ def recharge():
 
 
 # ============================================================
+# 路由：动态页面加载（已修复——白名单校验）
+# ============================================================
+
+ALLOWED_PAGES = {"help", "about", "contact", "faq"}
+
+@app.route("/page")
+def dynamic_page():
+    name = request.args.get("name", "")
+    page_content = None
+    error = None
+
+    if name:
+        # 清理输入：只保留文件名，去掉路径分隔符和..
+        clean_name = os.path.basename(name)
+        # 去掉扩展名
+        if "." in clean_name:
+            clean_name = clean_name.rsplit(".", 1)[0]
+
+        # 白名单校验：只允许预定义页面
+        if clean_name in ALLOWED_PAGES:
+            file_path = os.path.join("pages", clean_name + ".html")
+            if os.path.exists(file_path):
+                with open(file_path, "r", encoding="utf-8") as f:
+                    page_content = f.read()
+            else:
+                error = "页面不存在"
+        else:
+            error = "页面不存在"
+
+    username = session.get("username")
+    user_info = None
+    if username:
+        user_info = get_user_from_db(username)
+    return render_template("index.html", user=user_info, page_content=page_content, page_error=error)
+
+
+# ============================================================
 # 路由：安全文件上传
 # ============================================================
 

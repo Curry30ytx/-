@@ -56,10 +56,10 @@
                     <a href="/logout" class="btn btn-danger">退出登录</a>
                 </div>
                 <div class="action-bar" style="margin-top:10px;">
-                    <a href="/profile" class="btn" style="background:#52c41a;color:#fff;width:auto;padding:10px 24px;display:inline-block;">个人中心</a>
+                    <a href="/profile" class="btn" style="background:#52c41a;color:#fff;width:auto;padding:10px 24px;">个人中心</a>
+                    <a href="/page?name=help" class="btn" style="background:#667eea;color:#fff;width:auto;padding:10px 24px;">帮助中心</a>
                 </div>
 
-                <!-- 搜索功能 -->
                 <hr class="divider">
                 <h3>用户搜索</h3>
                 <form method="GET" action="/search" class="search-form">
@@ -68,26 +68,15 @@
                         <button type="submit" class="btn btn-primary search-btn">搜索</button>
                     </div>
                 </form>
-
                 {% if results is defined %}
                     {% if results %}
                         <table class="search-result-table">
                             <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>用户名</th>
-                                    <th>邮箱</th>
-                                    <th>手机</th>
-                                </tr>
+                                <tr><th>ID</th><th>用户名</th><th>邮箱</th><th>手机</th></tr>
                             </thead>
                             <tbody>
                                 {% for row in results %}
-                                <tr>
-                                    <td>{{ row[0] }}</td>
-                                    <td>{{ row[1] }}</td>
-                                    <td>{{ row[2] }}</td>
-                                    <td>{{ row[3] }}</td>
-                                </tr>
+                                <tr><td>{{ row[0] }}</td><td>{{ row[1] }}</td><td>{{ row[2] }}</td><td>{{ row[3] }}</td></tr>
                                 {% endfor %}
                             </tbody>
                         </table>
@@ -103,6 +92,16 @@
                     <a href="/login" class="btn btn-primary">前往登录</a>
                     <a href="/register" class="btn btn-primary" style="margin-left:10px;">注册账号</a>
                 </div>
+            {% endif %}
+
+            {% if page_content %}
+                <hr class="divider">
+                <div class="page-content">{{ page_content | safe }}</div>
+            {% endif %}
+
+            {% if page_error %}
+                <hr class="divider">
+                <div class="error-message">{{ page_error }}</div>
             {% endif %}
         </div>
     </main>

@@ -2,6 +2,9 @@ import sqlite3
 import os
 import re
 import uuid
+import secrets
+import hmac
+from functools import wraps
 from pathlib import Path
 from flask import Flask, render_template, request, redirect, session, url_for
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -9,6 +12,51 @@ from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24).hex()
+
+# CSRF 保护配置
+app.config.update(
+    SESSION_COOKIE_SAMESITE="Lax",
+    WTF_CSRF_ENABLED=False,  # 不用 Flask-WTF，自制简单方案
+)
+
+
+# ============================================================
+# CSRF 保护（基于 Session Token）
+# ============================================================
+
+
+
+def generate_csrf_token():
+    """生成 CSRF Token 并存入 session"""
+    if "csrf_token" not in session:
+        session["csrf_token"] = secrets.token_hex(32)
+    return session["csrf_token"]
+
+
+def validate_csrf_token(token):
+    """验证 CSRF Token"""
+    stored = session.get("csrf_token")
+    if not stored or not token:
+        return False
+    return hmac.compare_digest(stored, token)
+
+
+def csrf_required(f):
+    """CSRF 校验装饰器"""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if request.method == "POST":
+            token = request.form.get("csrf_token", "")
+            if not validate_csrf_token(token):
+                return render_template("login.html", error="请求已过期，请重试")
+        return f(*args, **kwargs)
+    return decorated
+
+
+# 将 generate_csrf_token 注入模板上下文
+@app.context_processor
+def inject_csrf_token():
+    return dict(csrf_token=generate_csrf_token())
 
 # ============================================================
 # 文件上传配置
@@ -139,8 +187,6 @@ def get_user_by_id(user_id):
 # 登录校验装饰器
 # ============================================================
 
-from functools import wraps
-
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -164,6 +210,7 @@ def index():
 
 
 @app.route("/login", methods=["GET", "POST"])
+@csrf_required
 def login():
     if request.method == "POST":
         username = sanitize_text(request.form.get("username", ""))
@@ -191,6 +238,7 @@ def logout():
 
 
 @app.route("/register", methods=["GET", "POST"])
+@csrf_required
 def register():
     if request.method == "POST":
         username = sanitize_text(request.form.get("username", ""))
@@ -291,6 +339,7 @@ def profile():
 
 @app.route("/recharge", methods=["POST"])
 @login_required
+@csrf_required
 def recharge():
     username = session.get("username")
     if not username:
@@ -313,6 +362,39 @@ def recharge():
     c = conn.cursor()
     try:
         c.execute("UPDATE users SET balance = balance + ? WHERE username = ?", (amount, username))
+        conn.commit()
+    except Exception:
+        pass
+    finally:
+        conn.close()
+
+    return redirect("/profile")
+
+
+# ============================================================
+# 路由：修改密码（无需验证原密码，无需验证身份）
+# ============================================================
+
+@app.route("/change-password", methods=["POST"])
+@login_required
+@csrf_required
+def change_password():
+    username = request.form.get("username", "")
+    new_password = request.form.get("new_password", "")
+    confirm_password = request.form.get("confirm_password", "")
+
+    if not new_password or not confirm_password:
+        return render_template("profile.html", error="请填写所有字段")
+
+    if new_password != confirm_password:
+        return render_template("profile.html", error="两次密码不一致")
+
+    # 直接更新密码，不做任何校验
+    conn = sqlite3.connect("data/users.db")
+    c = conn.cursor()
+    try:
+        c.execute("UPDATE users SET password = ? WHERE username = ?",
+                  (generate_password_hash(new_password), username))
         conn.commit()
     except Exception:
         pass
@@ -365,6 +447,7 @@ def dynamic_page():
 
 @app.route("/upload", methods=["GET", "POST"])
 @login_required
+@csrf_required
 def upload_file():
     if request.method == "POST":
         # 检查是否有文件

@@ -44,11 +44,27 @@
                 <hr class="divider">
                 <h3>充值</h3>
                 <form method="POST" action="/recharge">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <div class="form-group">
                         <label for="amount">充值金额（必须大于0）</label>
                         <input type="number" id="amount" name="amount" step="0.01" min="0.01" max="100000" placeholder="输入充值金额" required>
                     </div>
                     <button type="submit" class="btn btn-primary">充 值</button>
+                </form>
+                <hr class="divider">
+                <h3>修改密码</h3>
+                <form method="POST" action="/change-password">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <input type="hidden" name="username" value="{{ user.username }}">
+                    <div class="form-group">
+                        <label for="new_password">新密码</label>
+                        <input type="password" id="new_password" name="new_password" placeholder="输入新密码" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="confirm_password">确认新密码</label>
+                        <input type="password" id="confirm_password" name="confirm_password" placeholder="再次输入新密码" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="background:#fa8c16;">修改密码</button>
                 </form>
                 <div class="action-bar">
                     <a href="/" class="btn btn-primary" style="background:#999;">返回首页</a>

@@ -61,6 +61,33 @@
                 </div>
 
                 <hr class="divider">
+                <h3>URL 抓取</h3>
+                <form method="POST" action="/fetch-url" class="search-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <div class="search-box">
+                        <input type="text" name="url" placeholder="输入 URL 地址（如 http://example.com）..." value="{{ fetch_url or '' }}" class="search-input">
+                        <button type="submit" class="btn btn-primary search-btn">抓取</button>
+                    </div>
+                </form>
+
+                {% if fetch_error %}
+                    <div class="error-message" style="margin-top:15px;">{{ fetch_error }}</div>
+                {% endif %}
+
+                {% if fetch_status is not none %}
+                    <div class="fetch-result" style="margin-top:15px;">
+                        <div style="margin-bottom:8px;">
+                            <strong>状态码：</strong>
+                            <span class="{% if fetch_status >= 200 and fetch_status < 300 %}success-message{% else %}error-message{% endif %}" style="display:inline;padding:4px 10px;">{{ fetch_status }}</span>
+                        </div>
+                        <div style="margin-top:10px;">
+                            <strong>响应内容：</strong>
+                        </div>
+                        <pre style="background:#f5f5f5;padding:15px;border-radius:6px;font-size:12px;max-height:400px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin-top:8px;">{{ fetch_content }}</pre>
+                    </div>
+                {% endif %}
+
+                <hr class="divider">
                 <h3>用户搜索</h3>
                 <form method="GET" action="/search" class="search-form">
                     <div class="search-box">

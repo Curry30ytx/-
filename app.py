@@ -4,6 +4,10 @@ import re
 import uuid
 import secrets
 import hmac
+import socket
+import urllib.request
+import urllib.error
+import urllib.parse
 from functools import wraps
 from pathlib import Path
 from flask import Flask, render_template, request, redirect, session, url_for
@@ -57,6 +61,80 @@ def csrf_required(f):
 @app.context_processor
 def inject_csrf_token():
     return dict(csrf_token=generate_csrf_token())
+
+
+# ============================================================
+# SSRF 防护
+# ============================================================
+
+# 私有 IP 段
+PRIVATE_IP_RANGES = [
+    ("127.0.0.0", "127.255.255.255"),
+    ("10.0.0.0", "10.255.255.255"),
+    ("172.16.0.0", "172.31.255.255"),
+    ("192.168.0.0", "192.168.255.255"),
+    ("0.0.0.0", "0.255.255.255"),
+    ("169.254.0.0", "169.254.255.255"),  # 链路本地地址
+    ("::1", "::1"),  # IPv6 回环
+    ("fc00::", "fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"),  # IPv6 私有
+]
+
+
+def ip_to_int(ip_str):
+    """将 IP 字符串转为整数"""
+    parts = ip_str.split(".")
+    if len(parts) != 4:
+        return None
+    try:
+        return (int(parts[0]) << 24) + (int(parts[1]) << 16) + (int(parts[2]) << 8) + int(parts[3])
+    except (ValueError, IndexError):
+        return None
+
+
+def is_private_ip(ip_str):
+    """检查 IP 是否为私有/内网地址"""
+    ip_int = ip_to_int(ip_str)
+    if ip_int is None:
+        return False
+    for start, end in PRIVATE_IP_RANGES:
+        start_int = ip_to_int(start)
+        end_int = ip_to_int(end)
+        if start_int is not None and end_int is not None:
+            if start_int <= ip_int <= end_int:
+                return True
+    return False
+
+
+def validate_url_safe(target_url):
+    """
+    验证 URL 是否安全，防止 SSRF 攻击。
+    返回：(is_safe, error_message)
+    """
+    # 1. 协议校验：只允许 http 和 https
+    parsed = urllib.parse.urlparse(target_url)
+    if parsed.scheme not in ("http", "https"):
+        return False, f"不支持的协议：{parsed.scheme}，仅允许 http 和 https"
+
+    # 2. 获取主机名
+    hostname = parsed.hostname
+    if not hostname:
+        return False, "无法解析 URL 中的主机名"
+
+    # 3. 检查是否为内网主机名
+    if hostname in ("localhost", "localhost.localdomain"):
+        return False, "不允许访问本地服务"
+
+    # 4. 解析 IP 地址
+    try:
+        ip = socket.gethostbyname(hostname)
+    except socket.gaierror:
+        return False, f"无法解析主机名：{hostname}"
+
+    # 5. 检查是否为私有 IP
+    if is_private_ip(ip):
+        return False, f"不允许访问内网地址：{ip}"
+
+    return True, None
 
 # ============================================================
 # 文件上传配置
@@ -206,11 +284,11 @@ def index():
     user_info = None
     if username:
         user_info = get_user_from_db(username)
-    return render_template("index.html", user=user_info)
+    return render_template("index.html", user=user_info,
+                           fetch_status=None, fetch_content=None, fetch_error=None, fetch_url=None)
 
 
 @app.route("/login", methods=["GET", "POST"])
-@csrf_required
 def login():
     if request.method == "POST":
         username = sanitize_text(request.form.get("username", ""))
@@ -224,7 +302,8 @@ def login():
             session["username"] = username
             # 密码不传到前端
             user_display = {k: v for k, v in user.items() if k != "password"}
-            return render_template("index.html", user=user_display)
+            return render_template("index.html", user=user_display,
+                                   fetch_status=None, fetch_content=None, fetch_error=None, fetch_url=None)
         else:
             return render_template("login.html", error="用户名或密码错误")
 
@@ -305,7 +384,8 @@ def search():
     user_info = None
     if username:
         user_info = get_user_from_db(username)
-    return render_template("index.html", user=user_info, results=results, keyword=keyword)
+    return render_template("index.html", user=user_info, results=results, keyword=keyword,
+                           fetch_status=None, fetch_content=None, fetch_error=None, fetch_url=None)
 
 
 # ============================================================
@@ -405,6 +485,49 @@ def change_password():
 
 
 # ============================================================
+# 路由：URL 抓取（已修复 SSRF——协议+内网限制）
+# ============================================================
+
+@app.route("/fetch-url", methods=["POST"])
+@login_required
+@csrf_required
+def fetch_url():
+    target_url = request.form.get("url", "")
+    result = None
+    error = None
+    status_code = None
+    content = None
+
+    if target_url:
+        is_safe, err_msg = validate_url_safe(target_url)
+        if not is_safe:
+            error = err_msg
+        else:
+            try:
+                req = urllib.request.Request(target_url, headers={"User-Agent": "Mozilla/5.0"})
+                resp = urllib.request.urlopen(req, timeout=10)
+                status_code = resp.getcode()
+                raw = resp.read()
+                content = raw.decode("utf-8", errors="replace")
+                if len(content) > 5000:
+                    content = content[:5000] + "\n\n...（内容过长，仅显示前 5000 字符）"
+            except urllib.error.HTTPError as e:
+                status_code = e.code
+                content = str(e.reason)
+            except urllib.error.URLError as e:
+                error = f"URL 访问失败：{e.reason}"
+            except Exception as e:
+                error = f"访问出错：{str(e)}"
+
+    username = session.get("username")
+    user_info = None
+    if username:
+        user_info = get_user_from_db(username)
+    return render_template("index.html", user=user_info,
+                           fetch_status=status_code, fetch_content=content, fetch_error=error, fetch_url=target_url)
+
+
+# ============================================================
 # 路由：动态页面加载（已修复——白名单校验）
 # ============================================================
 
@@ -438,7 +561,8 @@ def dynamic_page():
     user_info = None
     if username:
         user_info = get_user_from_db(username)
-    return render_template("index.html", user=user_info, page_content=page_content, page_error=error)
+    return render_template("index.html", user=user_info, page_content=page_content, page_error=error,
+                           fetch_status=None, fetch_content=None, fetch_error=None, fetch_url=None)
 
 
 # ============================================================

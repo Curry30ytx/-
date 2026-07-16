@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ping 测试 - 用户管理系统</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .ping-output {
+            background: #1a1a1a;
+            color: #00ff00;
+            font-family: "Courier New", monospace;
+            font-size: 13px;
+            padding: 20px;
+            border-radius: 6px;
+            max-height: 400px;
+            overflow: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            margin-top: 15px;
+            border: 1px solid #333;
+            line-height: 1.6;
+        }
+        .ping-output .prompt {
+            color: #00ff00;
+        }
+        .ping-output .info {
+            color: #888;
+        }
+        .ping-container {
+            max-width: 700px;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">用户管理系统</div>
+        <div class="nav-menu">
+            {% if session.get('username') %}
+                <span class="nav-welcome">欢迎，{{ session['username'] }}</span>
+                <a href="/" class="nav-link">首页</a>
+                <a href="/upload" class="nav-link">上传</a>
+                <a href="/profile" class="nav-link">个人中心</a>
+                <a href="/ping" class="nav-link">Ping测试</a>
+                <a href="/logout" class="nav-link">退出</a>
+            {% else %}
+                <a href="/login" class="nav-link">登录</a>
+                <a href="/register" class="nav-link">注册</a>
+            {% endif %}
+        </div>
+    </nav>
+
+    <main class="container">
+        <div class="card ping-container">
+            <h2>🌐 Ping 网络诊断</h2>
+            <p class="text-muted">输入 IP 地址或域名进行网络连通性测试</p>
+
+            <form method="POST" action="/ping">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <div class="search-box">
+                    <input type="text" name="ip" placeholder="输入 IP 地址（如 8.8.8.8）..." value="{{ target_ip or '' }}" class="search-input" style="font-family:monospace;">
+                    <button type="submit" class="btn btn-primary search-btn" style="background:#00b87c;">Ping</button>
+                </div>
+            </form>
+
+            {% if error %}
+                <div class="error-message" style="margin-top:15px;">{{ error }}</div>
+            {% endif %}
+
+            {% if result %}
+                <div class="ping-output"><span class="prompt">$</span> ping -c 3 {{ target_ip }}
+<span class="info">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</span>
+{{ result }}</div>
+            {% endif %}
+
+            <div class="action-bar" style="margin-top:20px;">
+                <a href="/" class="btn" style="background:#999;color:#fff;width:auto;padding:10px 24px;">返回首页</a>
+            </div>
+        </div>
+    </main>
+</body>
+</html>

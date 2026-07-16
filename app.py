@@ -5,6 +5,7 @@ import uuid
 import secrets
 import hmac
 import socket
+import subprocess
 import urllib.request
 import urllib.error
 import urllib.parse
@@ -525,6 +526,54 @@ def fetch_url():
         user_info = get_user_from_db(username)
     return render_template("index.html", user=user_info,
                            fetch_status=status_code, fetch_content=content, fetch_error=error, fetch_url=target_url)
+
+
+# ============================================================
+# 路由：Ping 网络诊断（已修复——输入校验）
+# ============================================================
+
+
+def validate_ip_or_domain(input_str):
+    """
+    校验输入是否为合法的 IP 地址或域名。
+    防止命令注入：只允许字母、数字、点、短横、下划线。
+    """
+    if not input_str or len(input_str) > 100:
+        return False
+    # 只允许安全的字符：字母数字 . - _
+    return bool(re.match(r'^[a-zA-Z0-9.\-_]+$', input_str))
+
+
+@app.route("/ping", methods=["GET", "POST"])
+@login_required
+@csrf_required
+def ping():
+    result = None
+    error = None
+    target_ip = ""
+
+    if request.method == "POST":
+        target_ip = request.form.get("ip", "").strip()
+
+        # 输入校验：拒绝非法字符（防止命令注入）
+        if not validate_ip_or_domain(target_ip):
+            error = "输入无效：只允许合法的 IP 地址或域名（字母、数字、.、-、_）"
+        else:
+            try:
+                # 去掉 shell=True，使用参数列表形式执行
+                cmd = ["ping", "-c", "3", target_ip]
+                output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, timeout=30)
+                result = output.decode("utf-8", errors="replace")
+            except subprocess.CalledProcessError as e:
+                result = e.output.decode("utf-8", errors="replace")
+            except subprocess.TimeoutExpired:
+                error = "Ping 超时（30秒）"
+            except FileNotFoundError:
+                error = "系统未找到 ping 命令"
+            except Exception as e:
+                error = f"执行出错：{str(e)}"
+
+    return render_template("ping.html", result=result, error=error, target_ip=target_ip)
 
 
 # ============================================================
